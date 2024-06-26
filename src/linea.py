@@ -250,7 +250,7 @@ for index, layer in enumerate(reversed(layers)):
         with open(filename, 'w') as io:
             io.write(str(image))
         print(f'Wrote SVG: {filename}')
-        composite += elements
+        composite += [svg.G(id=f'layer-{index}', elements=elements)]
 if len(composite) > 0:
     filename = os.path.join(workspace, f'composite.svg')
     image = svg.SVG(
