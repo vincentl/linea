@@ -10,13 +10,13 @@ import os
 import requests
 import sys
 import yaml
-import matplotlib.pyplot as plt
 import pint
+import svg
 
 from contour import contours
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from pyproj import Transformer
-from svgpathtools import wsvg, Line, Path
+from svg.path.path import Line, Path
 from tracing import trace_linear, trace_cubic, trace_quadratic
 
 def bounding_box(pixels):
@@ -87,18 +87,7 @@ def locate_alignment(interior):
         z[X(x)][Y(y)] = min(z[X(x)][Y(y)], 1 + min(z[X(x+1)][Y(y)], z[X(x)][Y(y+1)]))
     m = z.max() - z.std()
     z = list(map(tuple, np.argwhere(z > m)))
-    return ((pt[0] + x_min - 1) + 1j*(pt[1] + y_min - 1) for pt in (z[0], z[-1])) 
-
-def square(pt, radius):
-    '''
-    Return a square Path with given center pt = (x + jy) and radius
-    '''
-    sq = [pt + (-1 - 1j)*radius, 
-          pt + (-1 + 1j)*radius,
-          pt + ( 1 + 1j)*radius,
-          pt + ( 1 - 1j)*radius]
-    sq += sq[0:1]
-    return Path(*[Line(start=src, end=dst) for src, dst in zip(sq[:-1],sq[1:])])
+    return ((pt[0] + x_min - 1, pt[1] + y_min - 1) for pt in (z[0], z[-1])) 
 
 # Check Version
 if not sys.version_info >= (3, 10):
@@ -212,7 +201,7 @@ for lon_index, row in enumerate(elevation):
 # In each layer, 0 = not in layer, 1 = in layer
 degree = config['contours']['degree']
 trace = {1: trace_linear, 2: trace_quadratic, 3: trace_cubic}[degree]
-viewbox = (0, 0, *elevation.shape)
+viewbox = svg.ViewBoxSpec(0, 0, *elevation.shape)
 dimensions = tuple(f'{i*xy_mm_per_pixel}mm' for i in elevation.shape)
 align = set()
 
@@ -222,17 +211,11 @@ align = set()
 #   3. trace the contour
 #   4. check if existing alignment points intersect island or add new alignment
 #   5. Draw all alignment marks
-
 marks = []
-composite_paths = []
-composite_colors = []
-composite_stroke = []
+composite = []
 for index, layer in enumerate(reversed(layers)):
     print(f'Finding contours in layer {index} of {len(layers)}')
-    paths = []
-    colors = []
-    strokewidths = []
-    
+    elements = []    
     # contours returns pairs of lists (center-of-edge, corner-of-edge) for each connected set of 'in-layer' pixels
     for (edge, center, pixels) in contours(layer):
         (x_min, y_min), (x_max, y_max) = bounding_box(pixels)
@@ -240,35 +223,43 @@ for index, layer in enumerate(reversed(layers)):
             continue
         # Choose contour type, convert to complex numbers, pad for contour degree
         contour = {'corner': edge, 'center': center}[config['contours']['point-on-edge']]
-        contour = [pt[0] + 1j*pt[1] for pt in contour]
         contour = contour[:-1] + contour[0:degree]
-        print(contour)
-        print('--')
-        # Trace path and use configuration to set stroke color and width
-        paths += [trace(contour)]
-        colors += [config['svg']['cut-color']]
-        strokewidths += [config['svg']['stroke-width']]
-        # Process alignment
+        # Trace path and use configuration to set stroke color and wid
+        elements += [trace(config, contour)]
+        # Draw alignment marks
         interior = set(find_interior(edge))
         if len(align.intersection(interior)) == 0:
             align.update(interior)
-            squares = locate_alignment(interior)
-            marks += [square(i, config['align']['radius']/xy_mm_per_pixel) for i in squares]
-        # Draw all alignment marks
-        paths += marks
-        colors += [config['align']['color']] * len(marks)
-        strokewidths += [config['svg']['stroke-width']] * len(marks)
+            locations = locate_alignment(interior)
+            marks += [svg.Circle(
+                cx = i[0], cy = i[1], r = config['align']['radius']/xy_mm_per_pixel,
+                fill = 'none',
+                stroke = config['align']['color'],
+                stroke_width = config['svg']['stroke-width'],
+            ) for i in locations]
 
     # provided there is at least one path, write an svg file
-    if len(paths) > 0:
+    if len(elements) > 0:
         filename = os.path.join(workspace, f'layer-{index:03d}.svg')
-        wsvg(paths=paths, filename=filename, colors=colors, stroke_widths=strokewidths, viewbox=viewbox, dimensions=dimensions)
+        image = svg.SVG(
+            viewBox = viewbox,
+            width = dimensions[0],
+            height = dimensions[1],
+            elements = elements + marks,
+        )
+        with open(filename, 'w') as io:
+            io.write(str(image))
         print(f'Wrote SVG: {filename}')
-        composite_paths += paths
-        composite_colors += colors
-        composite_stroke += strokewidths
-if len(paths) > 0:
+        composite += elements
+if len(composite) > 0:
     filename = os.path.join(workspace, f'composite.svg')
-    wsvg(paths=composite_paths, filename=filename, colors=composite_colors, stroke_widths=composite_stroke, viewbox=viewbox, dimensions=dimensions)
+    image = svg.SVG(
+        viewBox = viewbox,
+        width = dimensions[0],
+        height = dimensions[1],
+        elements = composite + marks,
+    )
+    with open(filename, 'w') as io:
+        io.write(str(image))
     print(f'Wrote SVG: {filename}')
 
