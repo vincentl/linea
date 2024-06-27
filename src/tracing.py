@@ -34,19 +34,6 @@ def bs_to_bz3(p012, p123, p234, p345):
     p222, p223, p233, p333 = (complex_to_cartensian(c) for c in (p222, p223, p233, p333))
     return [svg.MoveTo(*p222), svg.CubicBezier(*p223, *p233, *p333)]
 
-'''
-            svg.Path(
-                d=[
-                    svg.M(20, 230),
-                    svg.Q(40, 205, 50, 230),
-                    svg.T(90, 230),
-                ],
-                fill="none",
-                stroke="blue",
-                stroke_width=5,
-            ),
-'''
-
 def trace_linear(config, p):
     '''
     Input Points
@@ -71,6 +58,7 @@ def trace_quadratic(config, p):
       Path(...QuadraticBezier(p(i,i), p(i,i+1), p(i+1,i+1))...)
     '''
     d = [cmd for v in zip(p, p[1:], p[2:]) for cmd in bs_to_bz2(*v)]
+    d = d[:2] + d[3::2]
     return svg.Path(
         d=d,
         fill='none',
@@ -86,6 +74,7 @@ def trace_cubic(config, p):
       Path(...QuadraticBezier(p(i,i,i), p(i,i,i+1), p(i,i+1,i+1), p(i+1,i+1,i+1)...)
     '''
     d = [cmd for v in zip(p, p[1:], p[2:], p[3:]) for cmd in bs_to_bz3(*v)]
+    d = d[:2] + d[3::2]
     return svg.Path(
         d=d,
         fill='none',
