@@ -7,6 +7,7 @@ import geotiff
 import math
 import numpy as np
 import os
+import re
 import requests
 import sys
 import yaml
@@ -111,11 +112,14 @@ try:
                 ('svg','stroke-width')]:
         match item:
             case [a]:
-                config[a] = pint.Quantity(config[a]).to('mm').magnitude
+                if a in config:
+                    config[a] = pint.Quantity(config[a]).to('mm').magnitude
             case [a, b]:
-                config[a][b] = pint.Quantity(config[a][b]).to('mm').magnitude
+                if a in config and b in config[a]:
+                    config[a][b] = pint.Quantity(config[a][b]).to('mm').magnitude
             case [a, b, c]:
-                config[a][b][c] = pint.Quantity(config[a][b][c]).to('mm').magnitude
+                if a in config and b in config[a] and c in config[a][b]:
+                    config[a][b][c] = pint.Quantity(config[a][b][c]).to('mm').magnitude
             case _:
                 raise Exception('developer error - config value more than 3 levels deep')
 except Exception as e:
@@ -135,8 +139,10 @@ else:
 data_path = os.path.join(workspace, 'data.tiff')
 if not os.path.isfile(data_path):
     print('Downloading data...')
-    src = config['data']
-    url = f'https://portal.opentopography.org/API/globaldem?demtype={src["demtype"]}&outputFormat=GTiff&API_Key={src["api-key"]}'
+    demtype = config['data']['demtype']
+    api_key = config['data']['api-key']
+    api_key = api_key if re.search(r'^[0-9a-f]{32}$', api_key) is not None else os.environ[api_key]
+    url = f'https://portal.opentopography.org/API/globaldem?demtype={demtype}&outputFormat=GTiff&API_Key={api_key}'
     url += api_bounds(config['region'])
     response = requests.get(url)
     if not response.ok:
@@ -227,16 +233,17 @@ for index, layer in enumerate(reversed(layers)):
         # Trace path and use configuration to set stroke color and wid
         elements += [trace(config, contour)]
         # Draw alignment marks
-        interior = set(find_interior(edge))
-        if len(align.intersection(interior)) == 0:
-            align.update(interior)
-            locations = locate_alignment(interior)
-            marks += [svg.Circle(
-                cx = i[0], cy = i[1], r = config['align']['radius']/xy_mm_per_pixel,
-                fill = 'none',
-                stroke = config['align']['color'],
-                stroke_width = config['svg']['stroke-width'],
-            ) for i in locations]
+        if 'align' in config:
+            interior = set(find_interior(edge))
+            if len(align.intersection(interior)) == 0:
+                align.update(interior)
+                locations = locate_alignment(interior)
+                marks += [svg.Circle(
+                    cx = i[0], cy = i[1], r = config['align']['radius']/xy_mm_per_pixel,
+                    fill = 'none',
+                    stroke = config['align']['color'],
+                    stroke_width = config['svg']['stroke-width'],
+                ) for i in locations]
 
     # provided there is at least one path, write an svg file
     if len(elements) > 0:
