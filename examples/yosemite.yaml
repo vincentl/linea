@@ -1,0 +1,34 @@
+project: Yosemite Valley, CA, USA  # Descriptive name for the project
+workspace: yosemite                # path to working directory for the project
+region:                            # bounds define the region of interest
+  north: 37.769248                 #   northern latitude
+  west: -119.664105                #   western longitude
+  south: 37.705105                 #   southern latitude
+  east: -119.519888                #   easter longitude
+data:                              # parameters for fetching data
+  api-key: API_KEY                 #   per user API key from opentopography.org (either 32 hex character value or name of environment variable to read API key)
+  demtype: SRTMGL1                 #   global data set - see https://opentopography.org/developers
+  projection: EPSG:3857            #   map projection - see https://epsg.io - EPSG:3857 is a common, general purpose one
+model:                             # parameters for the final model
+  layer:                           #   layer parameters
+    thickness: 3.175mm             #     thickness of material with units (such as mm or in)
+    count: 12                      #     [optional] number of layers, otherwise compute layer count based on xy scale
+  bounds:                          #   restrictions on part sizes
+    max-edge: 7in                  #     maximum edge length of final model with units
+    min-dimension: 2mm             #     eliminate parts with and x or y dimension less than min-dimension
+contours:                          # parameters for converting elevation data into SVG paths
+  point-on-edge: center            #   'end' or 'center' - place control points for Paths on the end or in the center of edges
+  degree: 3                        #   degree of SVG curves (1 = lines, 2 = smooth, 3 = smoother)
+align:                             # [optional] include this sub-dictionary to draw alignment holes
+  color: rgb(0,224,244)            #   color code for alignment marks
+  radius: 0.75mm                   #   radius for alignment holes
+frame:                             # [optional] include this sub-dictionary to add a frame with rounded corners around each layer
+  color: rgb(0,224,0)              #   color for the frame
+  round:                           #   [optional] include this sub-dictionary to round the corners of the frame
+    x: 4mm                         #     rounding radius in the x direction
+    y: 4mm                         #     rounding radius in the y direction
+shadow:                            # [optional] include this sub-dictionary to add outline the layer above to help with alignment 
+  color: rgb(255,0,0)              #   color for the above-layer outline
+svg:                               # parameters for the SVG file
+  color: rgb(0,0,255)              #   color code for cut lines - see https://docs.lightburnsoftware.com/LayerColors.html
+  stroke-width: 0.03125mm          #   set the stroke width for the layer outlines

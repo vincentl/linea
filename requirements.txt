@@ -1,2 +1,7 @@
+geotiff
+requests
+pyyaml
+pint
+imagecodecs
 svg.path
 svg.py

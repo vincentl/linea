@@ -1,12 +1,31 @@
 from collections import defaultdict
 
 def mid(src, dst):
+   '''
+   Compute the midpoint of the line segment from `src` to `dst`
+   '''
    return tuple((i+j)/2.0 for i,j in zip(src, dst))
 
 def contours(z):
-    # Create edge set - all edges between white and black pixels
-    # Points maps point -> edge 
-    # edge = (src, dst, pixel)
+    '''
+    Input : z a numpy array representing a bitmap image with a 1-pixel
+    wide gutter of while pixels surrounding the bitmap.
+    
+    Return: A list of tuples where each tuple represents a connected
+    region in z. The tuple entries are (l, c, p) where
+      l = boundary points determine by edge intersections
+      c = boundary points determine by mid-points on each edge
+      p = boundary pixels
+
+    Coordinates in each tuple component trace the boundary.
+    '''
+    # Step 1 - Scan the input bitmap and identify all edges between white and
+    # black pixels. Account for the 1-pixel wide gutter around z when recording
+    # coordinates.
+    # edge = Set{(src, dst, pixel)} where src and dst are the end points of 
+    # the edge and pixel is the black boundary pixel.
+    # points = Dict[point] -> List{edges} is used to connect edge segments to
+    # form a connected boundary.
     x_count, y_count = z.shape
     edges = set()
     points = defaultdict(list)
@@ -25,7 +44,9 @@ def contours(z):
                     points[src] += [edge]
                     points[dst] += [edge]
                     edges.add(edge)
-    # Form contours
+    # Step 2 - Form contours
+    # Start with an arbitrary edge and use points dictionary to find connecting edge.
+    # Remote an edge from edges once it is used.
     contour = []
     while len(edges):
         src, dst, pixel = edges.pop()

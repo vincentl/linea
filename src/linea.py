@@ -3,6 +3,7 @@ import sys
 sys.path.append(dirname(__file__))
 
 import argparse
+import copy
 import geotiff
 import math
 import numpy as np
@@ -109,7 +110,10 @@ try:
                 ('model','bounds','max-edge'),
                 ('model','bounds','min-dimension'),
                 ('align','radius'),
-                ('svg','stroke-width')]:
+                ('svg','stroke-width'),
+                ('frame', 'round', 'x'),
+                ('frame', 'round', 'y'),
+                ]:
         match item:
             case [a]:
                 if a in config:
@@ -136,6 +140,9 @@ else:
     os.makedirs(workspace, exist_ok=True)
 
 # Check data exists or download
+region = config['region']
+print(f'Region: http://bboxfinder.com/#{region['south']},{region['west']},{region['north']},{region['east']}')
+
 data_path = os.path.join(workspace, 'data.tiff')
 if not os.path.isfile(data_path):
     print('Downloading data...')
@@ -179,8 +186,7 @@ z_distance = elevation.max() - elevation.min()
 # base xy scaling on largest lat/lon dimension
 xy_scale            = max(lon_distance, lat_distance) / max_edge   # real-m/scale-mm
 z_offset            = elevation.min()
-layer_count         = config['model']['layer']['count']
-layer_count         = int(round((elevation.max() - z_offset) / xy_scale / thickness)) if layer_count == 0 else layer_count
+layer_count         = config['model']['layer']['count'] if 'count' in config['model']['layer'] else int(round((elevation.max() - z_offset) / xy_scale / thickness))
 z_step              = z_distance / layer_count
 z_scale             = z_distance / (layer_count * thickness)
 
@@ -193,9 +199,24 @@ print(f'''Using {xy_scale:f} real-meters/scale-mm for xy
   {z_scale:f} real-meters/layer-mm for z
   {layer_count} layers''')
 
+# setup optional frame
+frame = [] if 'frame' not in config else [
+    svg.Rect(
+        x=0,
+        y=0,
+        width=elevation.shape[0],
+        height=elevation.shape[1],
+        rx=config['frame']['round']['x']/xy_mm_per_pixel if 'round' in config['frame'] else 0,
+        ry=config['frame']['round']['y']/xy_mm_per_pixel if 'round' in config['frame'] else 0,
+        fill='none',
+        stroke_width=config['svg']['stroke-width'],
+        stroke=config['frame']['color'],
+    )
+]
+
 # Create raw layer bitmaps with 0.0 boarder
-frame = np.zeros(tuple(i + 2 for i in elevation.shape), dtype=int)
-layers = [frame.copy() for i in range(layer_count + 1)]
+zeros = np.zeros(tuple(i + 2 for i in elevation.shape), dtype=int)
+layers = [zeros.copy() for i in range(layer_count + 1)]
 
 print(f'Scanning topology to form layers')
 for lon_index, row in enumerate(elevation):
@@ -219,6 +240,7 @@ align = set()
 #   5. Draw all alignment marks
 marks = []
 composite = []
+previous = []
 for index, layer in enumerate(reversed(layers)):
     print(f'Finding contours in layer {index} of {len(layers)}')
     elements = []    
@@ -244,7 +266,6 @@ for index, layer in enumerate(reversed(layers)):
                     stroke = config['align']['color'],
                     stroke_width = config['svg']['stroke-width'],
                 ) for i in locations]
-
     # provided there is at least one path, write an svg file
     if len(elements) > 0:
         filename = os.path.join(workspace, f'layer-{index:03d}.svg')
@@ -252,19 +273,25 @@ for index, layer in enumerate(reversed(layers)):
             viewBox = viewbox,
             width = dimensions[0],
             height = dimensions[1],
-            elements = elements + marks,
+            elements = frame + elements + marks + previous,
         )
         with open(filename, 'w') as io:
             io.write(str(image))
         print(f'Wrote SVG: {filename}')
         composite += [svg.G(id=f'layer-{index}', elements=elements)]
+    # track previous layer for drawing shadow paths
+    if 'shadow' in config:
+        previous = [copy.deepcopy(e) for e in elements]
+        for e in previous:
+            e.stroke = config['shadow']['color']
+
 if len(composite) > 0:
     filename = os.path.join(workspace, f'composite.svg')
     image = svg.SVG(
         viewBox = viewbox,
         width = dimensions[0],
         height = dimensions[1],
-        elements = composite + marks,
+        elements = frame + composite + marks,
     )
     with open(filename, 'w') as io:
         io.write(str(image))
