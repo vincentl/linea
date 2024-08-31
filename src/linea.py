@@ -242,7 +242,8 @@ composite = []
 previous = []
 for index, layer in enumerate(reversed(layers)):
     print(f'Finding contours in layer {index} of {len(layers)}')
-    elements = []    
+    elements = []
+    new_marks = []
     # contours returns pairs of lists (center-of-edge, corner-of-edge) for each connected set of 'in-layer' pixels
     for (edge, center, pixels) in contours(layer):
         (x_min, y_min), (x_max, y_max) = bounding_box(pixels)
@@ -253,13 +254,13 @@ for index, layer in enumerate(reversed(layers)):
         contour = contour[:-1] + contour[0:degree]
         # Trace path and use configuration to set stroke color and wid
         elements += [trace(config, contour)]
-        # Draw alignment marks
+        # Compute new alignment marks
         if 'align' in config:
             interior = set(find_interior(edge))
             if len(align.intersection(interior)) == 0:
                 align.update(interior)
                 locations = locate_alignment(interior)
-                marks += [svg.Circle(
+                new_marks += [svg.Circle(
                     cx = i[0], cy = i[1], r = config['align']['radius']/xy_mm_per_pixel,
                     fill = 'none',
                     stroke = config['align']['color'],
@@ -278,6 +279,8 @@ for index, layer in enumerate(reversed(layers)):
             io.write(str(image))
         print(f'Wrote SVG: {filename}')
         composite += [svg.G(id=f'layer-{index}', elements=elements)]
+    # update alignment marks so new alignment holes are drawn on lower layers
+    marks += new_marks
     # track previous layer for drawing shadow paths
     if 'shadow' in config:
         previous = [copy.deepcopy(e) for e in elements]
