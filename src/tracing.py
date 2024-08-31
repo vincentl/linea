@@ -46,7 +46,7 @@ def trace_linear(config, p):
     return svg.Path(
         d=d,
         fill='none',
-        stroke=config['svg']['color'],
+        stroke=config['contour']['color'],
         stroke_width=config['svg']['stroke-width'],
     )
 
@@ -62,7 +62,7 @@ def trace_quadratic(config, p):
     return svg.Path(
         d=d,
         fill='none',
-        stroke=config['svg']['color'],
+        stroke=config['contour']['color'],
         stroke_width=config['svg']['stroke-width'],
     )
 
@@ -78,6 +78,6 @@ def trace_cubic(config, p):
     return svg.Path(
         d=d,
         fill='none',
-        stroke=config['svg']['color'],
+        stroke=config['contour']['color'],
         stroke_width=config['svg']['stroke-width'],
     )

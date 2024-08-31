@@ -71,7 +71,7 @@ def find_interior(edge):
 
 def locate_alignment(interior):
     '''
-    use the grassfire transform to locate most interior points
+    use the grassfire transform to locate interior points
 
     input: interior is the set of pixels forming the interior
     
@@ -87,9 +87,8 @@ def locate_alignment(interior):
         z[X(x)][Y(y)] = 1 + min(z[X(x-1)][Y(y)], z[X(x)][Y(y-1)])
     for (x, y) in sorted(interior, reverse=True): 
         z[X(x)][Y(y)] = min(z[X(x)][Y(y)], 1 + min(z[X(x+1)][Y(y)], z[X(x)][Y(y+1)]))
-    m = z.max() - z.std()
-    z = list(map(tuple, np.argwhere(z > m)))
-    return ((pt[0] + x_min - 1, pt[1] + y_min - 1) for pt in (z[0], z[-1])) 
+    (x,y) = np.unravel_index(np.argmax(z), z.shape)
+    return [(x + x_min - 1, y + y_min - 1)]
 
 # Check Version
 if not sys.version_info >= (3, 10):
@@ -226,7 +225,7 @@ for lon_index, row in enumerate(elevation):
             layers[index][lon_index + 1][lat_index + 1] = 1.0
 
 # In each layer, 0 = not in layer, 1 = in layer
-degree = config['contours']['degree']
+degree = config['contour']['degree']
 trace = {1: trace_linear, 2: trace_quadratic, 3: trace_cubic}[degree]
 viewbox = svg.ViewBoxSpec(0, 0, *elevation.shape)
 dimensions = tuple(f'{i*xy_mm_per_pixel}mm' for i in elevation.shape)
@@ -250,7 +249,7 @@ for index, layer in enumerate(reversed(layers)):
         if (x_max - x_min) < xy_filter_pixels or (y_max - y_min) < xy_filter_pixels:
             continue
         # Choose contour type, convert to complex numbers, pad for contour degree
-        contour = {'corner': edge, 'center': center}[config['contours']['point-on-edge']]
+        contour = {'corner': edge, 'center': center}[config['contour']['point-on-edge']]
         contour = contour[:-1] + contour[0:degree]
         # Trace path and use configuration to set stroke color and wid
         elements += [trace(config, contour)]
