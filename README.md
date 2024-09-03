@@ -215,12 +215,20 @@ The exact details for cutting layers will depending on the laser cutter and cont
   - `linea` makes no attempt to efficiently layout parts, instead the parts are positioned according to the geography of the region. Manually positioning the parts on each layer can significantly reduce material waste. Be careful to move all the features (contour, alignment holes and shadows, and frame corners) together.
   - Keep track of parts! Some models will produce many individual parts per layer and final assembly can turn into a gigantic puzzle.
 
+![Image of cut layers on bed of laser cutter](https://github.com/vincentl/linea/blob/main/resources/laser-cutter.png)
+
 ## Final Assembly
 
 Start with the bottom layer, which is the layer with the largest numeric suffix, and glue the parts from the layer above into position. Aligning parts
 - ***Alignment Holes*** - If the `align` option is configured, simply match up the holes either visually or using a aid such as a toothpick or skewer. Some layers will have two or more holes and will be automatically oriented with all the holes are aligned. When a part has a single hole, use the `composite.svg` file to help visually orient the part.
 - ***Alignment Shadows*** - If the `shadow` options is configured, each part should sit exactly on the shadow line.
 - ***Paper templates*** - Another option for alignment is to configure alignment shadows and cut both the contours and shadow lines from a layer file on scrap paper. Then the outer edge of each paper cutout will align with a part on one layer and the inner hole on the paper cutout will align with the edges of a part from the layer above.
+
+![Image of first layer with alignment toothpicks](https://github.com/vincentl/linea/blob/main/resources/assembly-1.png)
+![Image of several layers assembled](https://github.com/vincentl/linea/blob/main/resources/assembly-2.png)
+![Image of final small parts ready for assembly](https://github.com/vincentl/linea/blob/main/resources/assembly-3.png)
+![Image of final 3D map](https://github.com/vincentl/linea/blob/main/resources/assembly-4.png)
+
 
 # Algorithms
 
