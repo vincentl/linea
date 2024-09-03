@@ -1,3 +1,5 @@
+![Image of a laser cut topographic map of Yosemite Valley, USA](hhttps://github.com/vincentl/linea/blob/main/resources/yosemite.png)
+
 # linea - Geographic Contour Line Generator
 
 **linea** is a prototype Python3 program for generating contour line SVG files suitable for laser cutting layers that stack to create an 3D topographic map. Topographic data is downloaded from [OpenTopography](https://opentopography.org/) and processed to sort the data into layers, identify connected areas in each layer, and form smooth SVG tracing paths.
@@ -35,7 +37,8 @@ The steps for creating a 3D topographic map with `linea` are:
 2. Create a configuration file
 3. Run `linea`
 4. Review the resulting SVG files and modify as needed
-5. Cut & assemble
+5. Cut
+6. Assembly
 
 This tutorial will demonstrate how to use `linea` to create a 3D map of Yosemite Valley in California.
 
@@ -70,6 +73,7 @@ data:                              # parameters for fetching data
   api-key: API_KEY                 #   API key from opentopography.org (32 hex characters or environment variable)
   demtype: SRTMGL1                 #   global data set - see https://opentopography.org/developers
   projection: EPSG:3857            #   map projection - see https://epsg.io - EPSG:3857
+  downsample: 1                    #   [optional] - for integer n, use every nth elevation sample to reduce data
 model:                             # parameters for the final model
   layer:                           #   layer parameters
     thickness: 3.175mm             #     thickness of material with units (such as mm or in)
@@ -99,7 +103,7 @@ svg:                               # parameters for the SVG file
 
 `linea` creates an SVG file with following kinds of paths
 * ___contour___: the cut lines 
-* ___align___: optional circular holes to assist in aligning layers
+* ___align___: optional circular holes to assist in aligning layers with an aid, such as a toothpick or skewer
 * ___frame___: optional frames used to round the corners of layers extend to the boundary of the model 
 * ___shadow___: optional feature to repeat the contour lines from the next higher level that can be engraved to help with alignment
 
@@ -119,6 +123,7 @@ To distinguish each SVG path type, the configuration file has a color field for 
 [opentopography.org](https://opentopography.org). The API key may be stored directly in the configuration file for convenience, but API keys should not be shared. If the value does not look like an API key, `linea` assumes it is the name of environment variable that contains the API key.
   * ___demtype___: names the OpenTopography dataset to query. See the [developers](https://opentopography.org/developers) documentation for more details.
   * ___projection___: mapping the spherical earth to a flat surface is called projection and there are many options for projection. See [epsq.io](https://epsg.io) for a list of projections and what areas of the global each projection is best suited.
+  * ___downsample___: optional integer value that reduces the number of elevation samples. Useful for large geographic areas or to create smoother contours.
 * ___model___: parameters that determine the size of the final model
   * ___layer___: the layer parameters govern the vertical dimension of the model
     * ___thickness___: specify the thickness of the model material with units
@@ -149,7 +154,7 @@ After completing the steps in the **Setup** section and creating a configuration
 ```bash
  API_KEY=0123456789abcdef... python3 src/linea.py examples/yosemite.yaml
 ```
-where `API_KEY` is the string value for the `api-key` field in the configuration file and the key `0123...ef` is a placeholder that must be replaced with the API key obtained during setup. If the API key is directly recorded in the configuration file, then the run line can simply begin with `python3`.
+where `API_KEY` is the string value for the `api-key` field in the configuration file and the key `0123...` is a placeholder that must be replaced with the API key obtained during setup. If the API key is directly recorded in the configuration file, then the run line can simply begin with `python3`.
 
 `linea` reports several items as output
 ```txt
@@ -158,6 +163,7 @@ Downloading data...
 Using 90.293380 real-meters/scale-mm for xy
   38.346457 real-meters/layer-mm for z
   12 layers
+Data grid has shape (518, 230)
 Scanning topology to form layers
 Finding contours in layer 0 of 13
 Finding contours in layer 1 of 13
@@ -189,26 +195,72 @@ One alignment hole in cyan is visible near the top and the dense set of contour 
 
 Depending on which optional features are used for a project, consider the following when reviewing the model layers.
 
-- Check for alignment holes that touch or cut through contour lines. `linea` attempts to put alignment holes in the center of the topmost layer in a stack, but if the layers are long and narrow or oddly shaped, the automatic placement might fail. You can choose to manually adjust the position of the hole in every layer or remove it from the upper layers.
+- Check for alignment holes that touch or cut through contour lines. `linea` attempts to put alignment holes in the center of the topmost layer in a stack, but if the layers are long and narrow or oddly shaped, the automatic placement might fail. You can choose to manually adjust the position of the hole in every layer or remove it from the upper layers. Alignment holes are not drawn for the top most part surrounding an alignment hole in the individual layer files so when assembly is compete, all the alignment holes are hidden.
 - Check the radius of the rounded frame corners and how the frame corners intersect with each layer.
 - Check for empty layers. `linea` starts with the designated layer count, but if the top layers contain only tiny parts that fall below the minimum part dimension, a layer could be empty. Either adjust the layer count or minimum dimensions to achieve the desired number of layers before finalizing a configuration.
 
 ## Cutting the Layers
 
+The exact details for cutting layers will depending on the laser cutter and control software. This section of the tutorial covers the general steps that must be adapted for a specific laser cutter setup.
 
+1. Configure the laser control software to use the appropriate settings for each feature. Alignment shadows should be lightly engraved and the other features configured for clean cuts for the model material. 
+
+2. **⁘ Test Cut ⁘** Browse through the layer files and look for examples of the four main types of features in a model. Isolate small samples and complete a test cut.
+  - Contour line - check for clean cuts with minimal burn marks
+  - Alignment hole - check that the alignment aid (tooth pick, skewer, etc) fits in the hole
+  - Layer alignment shadow line - check the line is visible with minimal burn marks
+  - Rounded frame corner - check that the dimension are aesthetically pleasing
+
+3. Work through each layer and cut all the parts
+  - `linea` makes no attempt to efficiently layout parts, instead the parts are positioned according to the geography of the region. Manually positioning the parts on each layer can significantly reduce material waste. Be careful to move all the features (contour, alignment holes and shadows, and frame corners) together.
+  - Keep track of parts! Some models will produce many individual parts per layer and final assembly can turn into a gigantic puzzle.
 
 ## Final Assembly
 
-
+Start with the bottom layer, which is the layer with the largest numeric suffix, and glue the parts from the layer above into position. Aligning parts
+- ***Alignment Holes*** - If the `align` option is configured, simply match up the holes either visually or using a aid such as a toothpick or skewer. Some layers will have two or more holes and will be automatically oriented with all the holes are aligned. When a part has a single hole, use the `composite.svg` file to help visually orient the part.
+- ***Alignment Shadows*** - If the `shadow` options is configured, each part should sit exactly on the shadow line.
+- ***Paper templates*** - Another option for alignment is to configure alignment shadows and cut both the contours and shadow lines from a layer file on scrap paper. Then the outer edge of each paper cutout will align with a part on one layer and the inner hole on the paper cutout will align with the edges of a part from the layer above.
 
 # Algorithms
 
+This section describes the algorithms `linea` uses for each major step in producing layer files from topological data. 
+
+## XYZ Scales
+
+The latitude and longitude boundaries are used to fetch the model data and then it is transformed according to the model projection. A model XY-scaling factor is computed by taking the largest bounding box dimension of the transformed region divided by the maximum model scale. This gives the ratio between geographic meters and model millimeters.
+
+For the vertical or Z dimension, either the layer count is specified in the configuration file or the XY-scale is used with the difference between the minimum and maximum elevation to compute a layer count. Given the layer count, the total elevation represented in the model (the maximum minus minimum elevation) is divided by the number of layers to compute the geographic elevation meters represented by one layer, which is called the Z-step.
+
 ## Layer Slice
 
-## Connected Components
+Elevation data records the elevation at regularly spaced points in a grid. Layers start out as grids of the same shape with all white pixels. Using the Z-step and the minimum elevation, `linea` simply computes which layer each elevation point maps into using 
+```math
+\text{layer} = \left\lfloor\frac{\text{elevation} - \text{minimum elevation}}{\text{Z-step}}\right\rfloor
+```
+The corresponding pixel in the computed layer is colored blacked and the same pixel in every layer below the computed layer is colored black.
 
-## Discrete Contour
+The end result is that each layer is like a black-white bitmap image with a white background and each black region describes one part to cut for the model.
+
+## Find Contours
+
+`linea` must take the layer bitmaps and convert each black region into an SVG path appropriate for laser cutting. The following algorithm is based on ideas presented in [_A Parallel Algorithm for Dilated Contour Extraction from Bilevel Images_](https://arxiv.org/pdf/cs/0001024).
+- Scan the input bitmap and identify all edges between white and black pixels
+- Start with an arbitrary edge and follow connected edges
+- Remove each visited edge from future consideration
+- When a path visits the starting edge, emit a contour and start again
+
+The sequence of edges around a contour are represented with one point per edge.
+The `point-on-edge` configuration parameter selects either the end or center of the edges.
 
 ## Continuous Contour
 
+An SVG path is not a sequence of points, but a collection of mathematical curves between points. Given a sequence of contour points, `linea` links the points together using lines (degree 1), quadratic curves (degree 2), or cubic curves (degree 3), depending on the configuration `contour:degree` value.
+
+There are many descriptions of this process from different viewpoints and for a wide range of applications. The paper [_An Introduction to B-Spline Curves_](https://github.com/vincentl/linea/blob/main/resources/An_Introduction_to_B-Spline_Curves.pdf) describes an approach developed by Dr. Lyle Ramshaw at DEC Systems Research Center using polar forms. Following this approach, `tracing.py` contains functions `bs_to_bz2` and `bs_to_bz3` to compute the appropriate SVG Bezier curves from a sequence of points. Some care is required to patch together the start and end of the path to form one continuous part boundary.
+
 ## Alignment Holes
+
+The bottom layer of a model is solid wood and the surface of the model consists of isolated shapes. `linea` places alignment holes below each of this top-most isolated shapes.
+
+A grassfire transform is used to identify a point that is most distant from all boundary points and an alignment hole is centered at this point. If the top-most shape is oddly shaped for very thin, it might not fully cover the alignment hole.

@@ -176,6 +176,11 @@ pt1 = (config['region']['east'], config['region']['south'])
 ll_box = [pt0, pt1]
 elevation = np.array(data.read_box(ll_box)).transpose()
 
+# Downsample
+if 'downsample' in config['data'] and config['data']['downsample'] > 1:
+    k = config['data']['downsample']
+    elevation = elevation[:-k+1:k,:-k+1:k]
+
 # Project the coordinates
 transformer = Transformer.from_crs(data.crs_code, config['data']['projection'], always_xy=True)
 bbox = list(transformer.itransform(ll_box))
@@ -197,6 +202,7 @@ xy_filter_pixels    = min_dimension / xy_mm_per_pixel              # pixels
 print(f'''Using {xy_scale:f} real-meters/scale-mm for xy
   {z_scale:f} real-meters/layer-mm for z
   {layer_count} layers''')
+print(f'Data grid has shape {elevation.shape}')
 
 # setup optional frame
 frame = [] if 'frame' not in config else [
