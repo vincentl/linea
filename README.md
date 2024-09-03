@@ -1,4 +1,4 @@
-![Image of a laser cut topographic map of Yosemite Valley, USA](hhttps://github.com/vincentl/linea/blob/main/resources/yosemite.png)
+![Image of a laser cut topographic map of Yosemite Valley, USA](https://github.com/vincentl/linea/blob/main/resources/yosemite.png)
 
 # linea - Geographic Contour Line Generator
 
