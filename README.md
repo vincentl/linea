@@ -16,7 +16,7 @@ Running `linea` requires:
 - An OpenTopography API key
   - [Register](https://portal.opentopography.org/newUser) for an account
   - Log into your account and make note of your API key
-- Python3, version 3.10 or newer
+- Python3, version 3.12 or later
   - Use your preferred operating system package manager or direct [download](https://www.python.org/downloads/) to get the latest version of Python3
 - Several Python3 modules
   - The [requirements.txt](requirements.txt) file lists the needed modules. To use a virtual environment with these modules

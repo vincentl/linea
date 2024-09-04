@@ -2,6 +2,9 @@ from os.path import dirname, abspath, join
 import sys
 sys.path.append(dirname(__file__))
 
+if not sys.version_info >= (3, 12):
+    sys.exit("Python 3.12 or later is required\n")
+
 import argparse
 import copy
 import geotiff
