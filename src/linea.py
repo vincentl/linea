@@ -1,4 +1,4 @@
-from os.path import dirname, abspath, join
+from os.path import dirname
 import sys
 sys.path.append(dirname(__file__))
 
@@ -7,21 +7,21 @@ if not sys.version_info >= (3, 12):
 
 import argparse
 import copy
-import geotiff
 import math
 import numpy as np
 import os
 import re
 import requests
-import sys
 import yaml
 import pint
 import svg
+import rasterio
+from rasterio.windows import Window
+from rasterio.warp import transform_bounds
 
 from contour import contours
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from pyproj import Transformer
-from svg.path.path import Line, Path
 from tracing import trace_linear, trace_cubic, trace_quadratic
 
 def bounding_box(pixels):
@@ -44,15 +44,16 @@ def api_bounds(region):
     w = (w-z).quantize(z, rounding=ROUND_FLOOR)
     return f'&north={n}&south={s}&east={e}&west={w}'
 
-def region_in_bbox(region: dict, data: geotiff.GeoTiff):
+def region_in_bbox(region_bounds, data_bounds):
     '''
     verify the data bounding box contains the user specified region
     '''
-    ((west, north), (east, south)) = data.tif_bBox
-    return (south <= region['north'] <= north
-            and south <= region['south'] <= north
-            and west <= region['east'] <= east
-            and west <= region['west'] <= east)
+    (west, south, east, north) = region_bounds
+    (data_west, data_south, data_east, data_north) = data_bounds
+    return (data_south <= north <= data_north
+            and data_south <= south <= data_north
+            and data_west <= east <= data_east
+            and data_west <= west <= data_east)
 
 def find_interior(edge):
     '''
@@ -92,11 +93,6 @@ def locate_alignment(interior):
         z[X(x)][Y(y)] = min(z[X(x)][Y(y)], 1 + min(z[X(x+1)][Y(y)], z[X(x)][Y(y+1)]))
     (x,y) = np.unravel_index(np.argmax(z), z.shape)
     return [(x + x_min - 1, y + y_min - 1)]
-
-# Check Version
-if not sys.version_info >= (3, 10):
-    print('Requires Python3.10 or newer')
-    sys.exit(1)
 
 # Load Project Configuration
 parser = argparse.ArgumentParser()
@@ -143,7 +139,7 @@ else:
 
 # Check data exists or download
 region = config['region']
-print(f'Region: http://bboxfinder.com/#{region['south']},{region['west']},{region['north']},{region['east']}')
+print(f"Region: http://bboxfinder.com/#{region['south']},{region['west']},{region['north']},{region['east']}")
 
 data_path = os.path.join(workspace, 'data.tiff')
 if not os.path.isfile(data_path):
@@ -153,7 +149,7 @@ if not os.path.isfile(data_path):
     api_key = api_key if re.search(r'^[0-9a-f]{32}$', api_key) is not None else os.environ[api_key]
     url = f'https://portal.opentopography.org/API/globaldem?demtype={demtype}&outputFormat=GTiff&API_Key={api_key}'
     url += api_bounds(config['region'])
-    response = requests.get(url)
+    response = requests.get(url, timeout=60)
     if not response.ok:
         print(f'ERROR: Failed to download topographic data - {response.reason}')
         sys.exit(1)
@@ -163,21 +159,39 @@ else:
     print('Using cached data...')
 
 # Load topographic data & validate region is inside the data bounding box
-data = geotiff.GeoTiff(data_path)
+region_bounds = (region['west'], region['south'], region['east'], region['north'])
+with rasterio.open(data_path) as dataset:
+    data_bounds = (dataset.bounds.left, dataset.bounds.bottom, dataset.bounds.right, dataset.bounds.top)
+    region_bounds_in_data_crs = transform_bounds('EPSG:4326', dataset.crs, *region_bounds, densify_pts=21) if dataset.crs else region_bounds
 
-if not region_in_bbox(config['region'], data):
-    print(f'The region {config["region"]} is not fully contained in the data bounding box.')
-    print(f'Remove the data file {data_path} and rerun {sys.argv[0]}.')
+    if not region_in_bbox(region_bounds_in_data_crs, data_bounds):
+        print(f'The region {config["region"]} is not fully contained in the data bounding box.')
+        print(f'Remove the data file {data_path} and rerun {sys.argv[0]}.')
+        sys.exit(1)
+
+    # Extract the elevation window for the requested bounds using index-based windowing
+    row_off, col_off = dataset.index(region_bounds_in_data_crs[0], region_bounds_in_data_crs[3])  # west, north
+    row_max, col_max = dataset.index(region_bounds_in_data_crs[2], region_bounds_in_data_crs[1])  # east, south
+    window = Window(
+        col_off,
+        row_off,
+        max(col_max - col_off, 0),
+        max(row_max - row_off, 0),
+    ).round_offsets().round_lengths(op='floor')
+    elevation = np.array(dataset.read(1, window=window)).transpose()
+    dataset_crs = dataset.crs
+
+if dataset_crs is None:
+    print('ERROR: The downloaded GeoTIFF is missing a CRS; cannot continue.')
     sys.exit(1)
 
 # Setup extracting the data
 max_edge = config['model']['bounds']['max-edge']
 min_dimension = config['model']['bounds']['min-dimension']
 thickness = config['model']['layer']['thickness']
-pt0 = (config['region']['west'], config['region']['north'])
-pt1 = (config['region']['east'], config['region']['south'])
+pt0 = (region_bounds_in_data_crs[0], region_bounds_in_data_crs[3])
+pt1 = (region_bounds_in_data_crs[2], region_bounds_in_data_crs[1])
 ll_box = [pt0, pt1]
-elevation = np.array(data.read_box(ll_box)).transpose()
 
 # Downsample
 if 'downsample' in config['data'] and config['data']['downsample'] > 1:
@@ -185,7 +199,7 @@ if 'downsample' in config['data'] and config['data']['downsample'] > 1:
     elevation = elevation[:-k+1:k,:-k+1:k]
 
 # Project the coordinates
-transformer = Transformer.from_crs(data.crs_code, config['data']['projection'], always_xy=True)
+transformer = Transformer.from_crs(dataset_crs, config['data']['projection'], always_xy=True)
 bbox = list(transformer.itransform(ll_box))
 lon_distance, lat_distance = (abs(bbox[0][0] - bbox[1][0]), abs(bbox[0][1] - bbox[1][1]))
 z_distance = elevation.max() - elevation.min()
@@ -307,4 +321,3 @@ if len(composite) > 0:
     with open(filename, 'w') as io:
         io.write(str(image))
     print(f'Wrote SVG: {filename}')
-
